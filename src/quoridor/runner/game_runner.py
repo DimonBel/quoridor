@@ -2,7 +2,7 @@ import json
 import os
 import time
 from quoridor.core.state import GameState
-from quoridor.core.moves import Move, MoveType
+from quoridor.core.moves import PAWN, WALL_H, WALL_V, pawn_move, wall_h, wall_v, move_repr
 from quoridor.bots.base import Bot
 
 
@@ -18,17 +18,16 @@ class GameResult:
         self.seed: int = 0
 
 
-def _move_to_str(move: Move) -> str:
-    if move.move_type == MoveType.PAWN:
-        return f"P{move.row},{move.col}"
-    elif move.move_type == MoveType.WALL_H:
-        return f"WH{move.row},{move.col}"
+def _move_to_str(move) -> str:
+    if move[0] == PAWN:
+        return f"P{move[1]},{move[2]}"
+    elif move[0] == WALL_H:
+        return f"WH{move[1]},{move[2]}"
     else:
-        return f"WV{move.row},{move.col}"
+        return f"WV{move[1]},{move[2]}"
 
 
-def _str_to_move(s: str) -> Move:
-    from quoridor.core.moves import pawn_move, wall_h, wall_v
+def _str_to_move(s: str):
     if s.startswith("P"):
         r, c = s[1:].split(",")
         return pawn_move(int(r), int(c))

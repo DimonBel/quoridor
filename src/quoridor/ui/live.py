@@ -1,6 +1,5 @@
 import time
 from quoridor.core.state import GameState
-from quoridor.core.moves import MoveType
 from quoridor.bots.base import Bot
 from quoridor.runner.game_runner import _move_to_str, _str_to_move, GameResult, run_game
 from quoridor.ui.renderer import render_live
