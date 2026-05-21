@@ -130,6 +130,18 @@ class GameState:
             return True
         return False
 
+    def strategic_moves(self, top_k: int = 10) -> list:
+        """Pawn moves + top-K strategically ranked wall moves.
+
+        Much smaller move list than legal_moves() (~14 vs ~132) while
+        keeping the highest-impact walls. Used by search bots to cut
+        branching factor.
+        """
+        from quoridor.eval.wall_strategy import strategic_wall_moves
+        pawn = self.pawn_moves_only()
+        walls = strategic_wall_moves(self, top_k=top_k)
+        return pawn + walls
+
     def clone(self) -> "GameState":
         gs = GameState.__new__(GameState)
         gs.positions = [self.positions[0], self.positions[1]]
