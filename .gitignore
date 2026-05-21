@@ -10,3 +10,4 @@ logs/
 *.jsonl
 leaderboard.json
 .pytest_cache/
+*.claude
