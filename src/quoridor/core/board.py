@@ -5,13 +5,25 @@ NUM_WALL_SLOTS = (BOARD_SIZE - 1) * (BOARD_SIZE - 1)
 DIR_N, DIR_S, DIR_W, DIR_E = 0, 1, 2, 3
 DIR_DELTAS = ((-1, 0), (1, 0), (0, -1), (0, 1))
 
+# Precomputed lookup tables — avoid divmod in hot paths
+_SQ_ROW = tuple(s // BOARD_SIZE for s in range(NUM_SQUARES))
+_SQ_COL = tuple(s % BOARD_SIZE for s in range(NUM_SQUARES))
+
 
 def sq(row: int, col: int) -> int:
     return row * BOARD_SIZE + col
 
 
 def sq_to_rc(s: int) -> tuple[int, int]:
-    return divmod(s, BOARD_SIZE)
+    return _SQ_ROW[s], _SQ_COL[s]
+
+
+def sq_row(s: int) -> int:
+    return _SQ_ROW[s]
+
+
+def sq_col(s: int) -> int:
+    return _SQ_COL[s]
 
 
 def in_bounds(row: int, col: int) -> bool:
@@ -80,10 +92,10 @@ def _build_edge_masks():
     return h_masks, v_masks
 
 
-NEIGHBOR_DIR: tuple[tuple[int, int, int, int], ...] = tuple(_build_neighbor_dir())
+NEIGHBOR_DIR: tuple = tuple(_build_neighbor_dir())
 _raw_h, _raw_v = _build_edge_masks()
-EDGE_H_MASK: tuple[tuple[int, int, int, int], ...] = tuple(tuple(m) for m in _raw_h)
-EDGE_V_MASK: tuple[tuple[int, int, int, int], ...] = tuple(tuple(m) for m in _raw_v)
+EDGE_H_MASK: tuple = tuple(tuple(m) for m in _raw_h)
+EDGE_V_MASK: tuple = tuple(tuple(m) for m in _raw_v)
 
 
 def is_edge_blocked(s: int, di: int, h_walls: int, v_walls: int) -> bool:
@@ -94,3 +106,36 @@ def is_edge_blocked(s: int, di: int, h_walls: int, v_walls: int) -> bool:
     if vm and vm & v_walls:
         return True
     return False
+
+
+# Precompute which wall indices affect each square's edges.
+# WALL_AFFECTS_SQUARE[wi] = set of (square, direction) pairs affected by wall wi.
+# Used for smart wall move generation.
+def _build_wall_edge_map():
+    """For each wall slot, which squares have an edge blocked by it (as h_wall or v_wall)."""
+    h_affected = [[] for _ in range(NUM_WALL_SLOTS)]
+    v_affected = [[] for _ in range(NUM_WALL_SLOTS)]
+    for s in range(NUM_SQUARES):
+        for di in range(4):
+            hm = EDGE_H_MASK[s][di]
+            if hm:
+                wi = 0
+                tmp = hm
+                while tmp:
+                    if tmp & 1:
+                        h_affected[wi].append((s, di))
+                    tmp >>= 1
+                    wi += 1
+            vm = EDGE_V_MASK[s][di]
+            if vm:
+                wi = 0
+                tmp = vm
+                while tmp:
+                    if tmp & 1:
+                        v_affected[wi].append((s, di))
+                    tmp >>= 1
+                    wi += 1
+    return tuple(tuple(a) for a in h_affected), tuple(tuple(a) for a in v_affected)
+
+
+WALL_H_AFFECTS, WALL_V_AFFECTS = _build_wall_edge_map()

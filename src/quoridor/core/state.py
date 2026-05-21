@@ -1,14 +1,14 @@
-from quoridor.core.moves import Move, MoveType, Player
+from quoridor.core.moves import PAWN, WALL_H, WALL_V, Player
 from quoridor.core.board import (
     BOARD_SIZE,
-    NUM_WALL_SLOTS,
     sq,
-    sq_to_rc,
+    _SQ_ROW,
     wall_idx,
 )
 from quoridor.core.rules import (
     check_winner,
     generate_all_moves,
+    generate_pawn_moves,
 )
 
 
@@ -67,7 +67,7 @@ class GameState:
     def v_walls_count(self) -> int:
         return bin(self.v_walls).count("1")
 
-    def legal_moves(self) -> list[Move]:
+    def legal_moves(self) -> list:
         return generate_all_moves(
             self.current_player,
             (self.positions[0], self.positions[1]),
@@ -76,7 +76,17 @@ class GameState:
             (self.walls_remaining[0], self.walls_remaining[1]),
         )
 
-    def make_move(self, move: Move) -> UndoRecord:
+    def pawn_moves_only(self) -> list:
+        """Fast move gen — pawn moves only, no wall validation BFS."""
+        cp = self.current_player
+        return generate_pawn_moves(
+            self.positions[cp],
+            self.positions[1 - cp],
+            self.h_walls,
+            self.v_walls,
+        )
+
+    def make_move(self, move) -> UndoRecord:
         undo = UndoRecord(
             move,
             self.h_walls,
@@ -85,14 +95,15 @@ class GameState:
             (self.walls_remaining[0], self.walls_remaining[1]),
             self.current_player,
         )
-        if move.move_type == MoveType.PAWN:
-            self.positions[self.current_player] = sq(move.row, move.col)
-        elif move.move_type == MoveType.WALL_H:
-            wi = wall_idx(move.row, move.col)
+        mt = move[0]
+        if mt == PAWN:
+            self.positions[self.current_player] = sq(move[1], move[2])
+        elif mt == WALL_H:
+            wi = wall_idx(move[1], move[2])
             self.h_walls |= 1 << wi
             self.walls_remaining[self.current_player] -= 1
-        elif move.move_type == MoveType.WALL_V:
-            wi = wall_idx(move.row, move.col)
+        elif mt == WALL_V:
+            wi = wall_idx(move[1], move[2])
             self.v_walls |= 1 << wi
             self.walls_remaining[self.current_player] -= 1
         self.current_player = 1 - self.current_player
