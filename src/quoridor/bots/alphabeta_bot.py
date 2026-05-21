@@ -1,7 +1,7 @@
 from quoridor.bots.base import Bot
 from quoridor.bots.registry import register
 from quoridor.core.state import GameState
-from quoridor.core.moves import Move
+from quoridor.core.moves import PAWN
 from quoridor.eval.heuristics import evaluate
 
 _INF = 999999.0
@@ -15,6 +15,19 @@ def _zobrist_hash(state: GameState) -> int:
     return h & 0x7FFFFFFFFFFFFFFF
 
 
+def _sort_moves(moves: list) -> list:
+    """Pawn moves first for better alpha-beta cutoffs."""
+    pawn = []
+    walls = []
+    for m in moves:
+        if m[0] == PAWN:
+            pawn.append(m)
+        else:
+            walls.append(m)
+    pawn.extend(walls)
+    return pawn
+
+
 @register
 class AlphaBetaBot(Bot):
     name = "alphabeta"
@@ -26,11 +39,12 @@ class AlphaBetaBot(Bot):
         self.wall_weight = params.get("wall_weight", 0.5)
         self._tt: dict = {}
 
-    def choose_move(self, state: GameState) -> Move:
+    def choose_move(self, state: GameState):
         moves = state.legal_moves()
         if not moves:
             return moves[0]
         self._tt.clear()
+        moves = _sort_moves(moves)
         best_move = moves[0]
         best_score = -_INF
         maximizing = state.current_player == 0
@@ -52,8 +66,10 @@ class AlphaBetaBot(Bot):
     ) -> float:
         h = _zobrist_hash(state)
         tt_key = (h, depth, maximizing)
-        if tt_key in self._tt:
-            return self._tt[tt_key]
+        tt = self._tt
+        cached = tt.get(tt_key)
+        if cached is not None:
+            return cached
 
         winner = state.winner()
         if winner == 0:
@@ -62,10 +78,10 @@ class AlphaBetaBot(Bot):
             return -10000.0 - depth
         if depth == 0 or state.is_over():
             val = self._evaluate(state)
-            self._tt[tt_key] = val
+            tt[tt_key] = val
             return val
 
-        moves = state.legal_moves()
+        moves = _sort_moves(state.legal_moves())
         if maximizing:
             val = -_INF
             for move in moves:
@@ -75,7 +91,7 @@ class AlphaBetaBot(Bot):
                 alpha = max(alpha, val)
                 if alpha >= beta:
                     break
-            self._tt[tt_key] = val
+            tt[tt_key] = val
             return val
         else:
             val = _INF
@@ -86,7 +102,7 @@ class AlphaBetaBot(Bot):
                 beta = min(beta, val)
                 if alpha >= beta:
                     break
-            self._tt[tt_key] = val
+            tt[tt_key] = val
             return val
 
     def _evaluate(self, state: GameState) -> float:

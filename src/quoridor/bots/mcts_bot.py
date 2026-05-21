@@ -1,10 +1,9 @@
 import math
 import random
-import time
 from quoridor.bots.base import Bot
 from quoridor.bots.registry import register
 from quoridor.core.state import GameState
-from quoridor.core.moves import Move
+from quoridor.core.moves import PAWN
 from quoridor.eval.heuristics import evaluate
 
 
@@ -20,17 +19,16 @@ class _MCTSNode:
         self.untried_moves = list(untried_moves) if untried_moves else []
         self.player_just_moved = player_just_moved
 
-    def ucb1(self, exploration: float = 1.414) -> float:
+    def ucb1(self, exploration: float, log_parent: float) -> float:
         if self.visits == 0:
             return float("inf")
-        return self.wins / self.visits + exploration * math.sqrt(
-            math.log(self.parent.visits) / self.visits
-        )
+        return self.wins / self.visits + exploration * math.sqrt(log_parent / self.visits)
 
     def select_child(self, exploration: float) -> "_MCTSNode":
-        return max(self.children, key=lambda c: c.ucb1(exploration))
+        log_p = math.log(self.visits)
+        return max(self.children, key=lambda c: c.ucb1(exploration, log_p))
 
-    def add_child(self, move: Move, untried_moves: list, player_just_moved: int) -> "_MCTSNode":
+    def add_child(self, move, untried_moves: list, player_just_moved: int) -> "_MCTSNode":
         child = _MCTSNode(
             move=move, parent=self,
             untried_moves=untried_moves,
@@ -52,7 +50,7 @@ class MCTSBot(Bot):
         self.rollout = params.get("rollout", "random")
         self._rng = random.Random(params.get("seed"))
 
-    def choose_move(self, state: GameState) -> Move:
+    def choose_move(self, state: GameState):
         moves = state.legal_moves()
         if len(moves) == 1:
             return moves[0]
@@ -66,10 +64,12 @@ class MCTSBot(Bot):
             node = root
             sim_state = state.clone()
 
+            # Selection
             while not node.untried_moves and node.children:
                 node = node.select_child(self.exploration)
                 sim_state.make_move(node.move)
 
+            # Expansion
             if node.untried_moves and not sim_state.is_over():
                 move = self._rng.choice(node.untried_moves)
                 sim_state.make_move(move)
@@ -79,8 +79,10 @@ class MCTSBot(Bot):
                     1 - sim_state.current_player,
                 )
 
-            result = self._rollout(sim_state)
+            # Rollout — pawn-only for speed
+            result = self._rollout_fn(sim_state)
 
+            # Backprop
             while node is not None:
                 node.visits += 1
                 if result == node.player_just_moved:
@@ -92,31 +94,12 @@ class MCTSBot(Bot):
         best = max(root.children, key=lambda c: c.visits)
         return best.move
 
-    def _rollout(self, state: GameState) -> int:
+    def _rollout_fn(self, state: GameState) -> int:
+        """Fast pawn-only rollout — avoids wall move generation entirely."""
+        rng_choice = self._rng.choice
         while not state.is_over():
-            moves = state.legal_moves()
+            moves = state.pawn_moves_only()
             if not moves:
                 break
-            if self.rollout == "random":
-                move = self._rng.choice(moves)
-            else:
-                move = self._heuristic_move(state, moves)
-            state.make_move(move)
+            state.make_move(rng_choice(moves))
         return state.winner()
-
-    def _heuristic_move(self, state: GameState, moves: list[Move]) -> Move:
-        best = moves[0]
-        best_score = -999999.0
-        cp = state.current_player
-        for move in moves[:10]:
-            undo = state.make_move(move)
-            score = evaluate(
-                cp, state.p1_pos, state.p2_pos,
-                state.h_walls, state.v_walls,
-                (state.walls_remaining[0], state.walls_remaining[1]),
-            )
-            state.unmake_move(undo)
-            if score > best_score:
-                best_score = score
-                best = move
-        return best

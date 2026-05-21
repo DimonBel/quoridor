@@ -1,9 +1,7 @@
 from quoridor.bots.base import Bot
 from quoridor.bots.registry import register
 from quoridor.core.state import GameState
-from quoridor.core.moves import Move, MoveType
 from quoridor.core.pathfind import bfs_shortest_path
-from quoridor.core.board import sq_to_rc, sq
 from quoridor.core.moves import Player
 
 
@@ -16,7 +14,7 @@ class GreedyBot(Bot):
         self.path_weight = params.get("path_weight", 2.0)
         self.wall_weight = params.get("wall_weight", 1.0)
 
-    def choose_move(self, state: GameState) -> Move:
+    def choose_move(self, state: GameState):
         moves = state.legal_moves()
         if not moves:
             return moves[0]
