@@ -71,12 +71,20 @@ class MCTSBot(Bot):
                 node = node.select_child(self.exploration)
                 sim_state.make_move(node.move)
 
-            # Expansion — use strategic moves to keep tree narrow
+            # Expansion — strategic moves at root, pawn-only deeper for speed
             if node.untried_moves and not sim_state.is_over():
                 move = self._rng.choice(node.untried_moves)
                 sim_state.make_move(move)
-                child_moves = sim_state.strategic_moves(top_k=self.top_k)
-                if not child_moves:
+                depth = 0
+                p = node
+                while p.parent is not None:
+                    depth += 1
+                    p = p.parent
+                if depth < 2:
+                    child_moves = sim_state.strategic_moves(top_k=self.top_k)
+                    if not child_moves:
+                        child_moves = sim_state.pawn_moves_only()
+                else:
                     child_moves = sim_state.pawn_moves_only()
                 node = node.add_child(
                     move,

@@ -187,22 +187,51 @@ def bfs_path_trace(
         s_nd = nd[s]
         s_hm = hm[s]
         s_vm = vm[s]
-        for di in range(4):
-            ns = s_nd[di]
-            if ns >= 0 and prev[ns] < 0:
-                h = s_hm[di]
-                if h and h & h_walls:
-                    continue
-                v = s_vm[di]
-                if v and v & v_walls:
-                    continue
-                prev[ns] = s
-                if goal_lo <= ns < goal_hi:
-                    found = ns
-                    break
-                queue.append(ns)
-        if found >= 0:
-            break
+        # Unrolled 4 directions
+        ns = s_nd[0]
+        if ns >= 0 and prev[ns] < 0:
+            h = s_hm[0]
+            if not (h and h & h_walls):
+                v = s_vm[0]
+                if not (v and v & v_walls):
+                    prev[ns] = s
+                    if goal_lo <= ns < goal_hi:
+                        found = ns
+                        break
+                    queue.append(ns)
+        ns = s_nd[1]
+        if ns >= 0 and prev[ns] < 0:
+            h = s_hm[1]
+            if not (h and h & h_walls):
+                v = s_vm[1]
+                if not (v and v & v_walls):
+                    prev[ns] = s
+                    if goal_lo <= ns < goal_hi:
+                        found = ns
+                        break
+                    queue.append(ns)
+        ns = s_nd[2]
+        if ns >= 0 and prev[ns] < 0:
+            h = s_hm[2]
+            if not (h and h & h_walls):
+                v = s_vm[2]
+                if not (v and v & v_walls):
+                    prev[ns] = s
+                    if goal_lo <= ns < goal_hi:
+                        found = ns
+                        break
+                    queue.append(ns)
+        ns = s_nd[3]
+        if ns >= 0 and prev[ns] < 0:
+            h = s_hm[3]
+            if not (h and h & h_walls):
+                v = s_vm[3]
+                if not (v and v & v_walls):
+                    prev[ns] = s
+                    if goal_lo <= ns < goal_hi:
+                        found = ns
+                        break
+                    queue.append(ns)
     if found < 0:
         return None
     path = []

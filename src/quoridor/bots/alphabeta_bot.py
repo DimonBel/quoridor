@@ -35,6 +35,7 @@ class AlphaBetaBot(Bot):
         if not moves:
             return state.legal_moves()[0]
         self._tt.clear()
+        self._move_cache: dict = {}
         best_move = moves[0]
         best_score = -_INF
         maximizing = state.current_player == 0
@@ -71,9 +72,15 @@ class AlphaBetaBot(Bot):
             tt[tt_key] = val
             return val
 
-        moves = state.strategic_moves(top_k=self.inner_top_k)
-        if not moves:
-            moves = state.pawn_moves_only()
+        sk = state._state_key()
+        cached = self._move_cache.get(sk)
+        if cached is not None:
+            moves = cached
+        else:
+            moves = state.strategic_moves(top_k=self.inner_top_k)
+            if not moves:
+                moves = state.pawn_moves_only()
+            self._move_cache[sk] = moves
 
         if maximizing:
             val = -_INF

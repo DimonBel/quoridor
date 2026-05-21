@@ -130,6 +130,14 @@ class GameState:
             return True
         return False
 
+    def _state_key(self) -> int:
+        """Fast hash for caching — combines wall bitmasks + positions + player."""
+        h = self.h_walls ^ (self.v_walls * 0x9E3779B97F4A7C15)
+        h ^= self.positions[0] * 0x517CC1B727220A95
+        h ^= self.positions[1] * 0x6C62272E07BB0142
+        h ^= self.current_player * 0x4CF5AD432745937F
+        return h & 0x7FFFFFFFFFFFFFFF
+
     def strategic_moves(self, top_k: int = 10) -> list:
         """Pawn moves + top-K strategically ranked wall moves.
 

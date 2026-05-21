@@ -38,8 +38,11 @@ def wall_in_bounds(row: int, col: int) -> bool:
     return 0 <= row < BOARD_SIZE - 1 and 0 <= col < BOARD_SIZE - 1
 
 
+_WALL_IDX_RC = tuple(divmod(wi, BOARD_SIZE - 1) for wi in range(NUM_WALL_SLOTS))
+
+
 def wall_idx_to_rc(wi: int) -> tuple[int, int]:
-    return divmod(wi, BOARD_SIZE - 1)
+    return _WALL_IDX_RC[wi]
 
 
 def _build_neighbor_dir():

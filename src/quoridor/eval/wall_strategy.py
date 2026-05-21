@@ -14,12 +14,13 @@ from quoridor.core.board import (
     BOARD_SIZE,
     NUM_WALL_SLOTS,
     _SQ_ROW,
+    _WALL_IDX_RC,
     wall_idx,
     wall_idx_to_rc,
 )
 from quoridor.core.moves import PAWN, WALL_H, WALL_V, Player, wall_h, wall_v
 from quoridor.core.pathfind import bfs_path_trace, bfs_shortest_path, bfs_path_exists
-from quoridor.core.rules import _path_edge_walls, generate_wall_moves
+from quoridor.core.rules import _path_edge_walls
 
 _WS = BOARD_SIZE - 1  # wall grid width = 8
 
@@ -77,14 +78,17 @@ def game_phase(move_count: int, walls_remaining_0: int, walls_remaining_1: int) 
 
 
 # ---------------------------------------------------------------------------
-#  Core scoring
+#  Core scoring — single-pass wall generation + scoring
 # ---------------------------------------------------------------------------
 
 def score_wall_moves(state, top_k: int = 10):
     """Score and rank wall moves. Returns [(score, move), ...] descending.
 
-    Pass 1: cheap heuristic (no BFS per wall).
-    Pass 2: BFS verification on top 2*K candidates.
+    Combines wall legality checking with heuristic scoring in one pass,
+    avoiding the separate generate_wall_moves() call.
+
+    Pass 1: heuristic score + legality check (BFS only for path-critical walls)
+    Pass 2: BFS verification on top 2*K candidates
     """
     cp = state.current_player
     my_pos = state.positions[cp]
@@ -98,19 +102,16 @@ def score_wall_moves(state, top_k: int = 10):
     if wr <= 0:
         return []
 
-    # Get legal wall moves
-    wall_moves = generate_wall_moves(
-        state.p1_pos, state.p2_pos, h_walls, v_walls, wr,
-    )
-    if not wall_moves:
-        return []
+    p1_pos = state.positions[0]
+    p2_pos = state.positions[1]
 
-    # Trace paths once
+    # Trace paths once — reused for both legality and scoring
     my_path = bfs_path_trace(my_pos, my_goal, h_walls, v_walls)
     opp_path = bfs_path_trace(opp_pos, opp_goal, h_walls, v_walls)
 
     opp_path_walls = _path_edge_walls(opp_path) if opp_path else set()
     my_path_walls = _path_edge_walls(my_path) if my_path else set()
+    critical_walls = opp_path_walls | my_path_walls
 
     # Baseline distances
     my_dist = len(my_path) - 1 if my_path else 99
@@ -118,59 +119,86 @@ def score_wall_moves(state, top_k: int = 10):
 
     occupied = h_walls | v_walls
     opp_row = _SQ_ROW[opp_pos]
-
     phase = game_phase(state.move_count, state.walls_remaining[0], state.walls_remaining[1])
 
-    # --- Pass 1: cheap heuristic scoring ---
+    # Local refs for speed
+    _wn = WALL_NEIGHBORS
+    _wcd = WALL_CENTER_DIST
+    _mcd = _MAX_CENTER_DIST
+    _wirc = _WALL_IDX_RC
+    _bfs_exists = bfs_path_exists
+    _p1_goal = Player.ONE.goal_row
+    _p2_goal = Player.TWO.goal_row
+
+    # --- Pass 1: combined legality + heuristic scoring ---
     scored = []
-    for move in wall_moves:
-        wi = wall_idx(move[1], move[2])
-        score = 0.0
+    scored_append = scored.append
+    for wi in range(NUM_WALL_SLOTS):
+        bit = 1 << wi
+        if bit & occupied:
+            continue
 
-        # 1. On-opponent-path bonus
-        if wi in opp_path_walls:
-            score += 4.0
+        wr_pos = _wirc[wi][0]
+        row_dist = wr_pos - opp_row
+        if row_dist < 0:
+            row_dist = -row_dist
 
-        # 2. On-own-path penalty
-        if wi in my_path_walls:
-            score -= 3.0
+        is_critical = wi in critical_walls
+        on_opp = wi in opp_path_walls
+        on_own = wi in my_path_walls
 
-        # 3. Synergy: count adjacent occupied walls
-        for nwi in WALL_NEIGHBORS[wi]:
+        # Base score (same for H and V at this slot)
+        base = 0.0
+        if on_opp:
+            base += 4.0
+        if on_own:
+            base -= 3.0
+        for nwi in _wn[wi]:
             if (1 << nwi) & occupied:
-                score += 0.5
-
-        # 4. Zone proximity to opponent
-        wr_pos, _ = wall_idx_to_rc(wi)
-        row_dist = abs(wr_pos - opp_row)
+                base += 0.5
         if row_dist <= 1:
-            score += 2.0
+            base += 2.0
         elif row_dist <= 2:
-            score += 1.0
+            base += 1.0
         elif row_dist <= 3:
-            score += 0.5
-
-        # 5. Center bonus
-        score += 1.0 - WALL_CENTER_DIST[wi] / _MAX_CENTER_DIST
-
-        # 6. Phase modifier: in endgame, amplify on-path score, dampen speculative
+            base += 0.5
+        base += 1.0 - _wcd[wi] / _mcd
         if phase > 0.5:
-            if wi in opp_path_walls:
-                score *= 1.0 + (phase - 0.5)  # up to 1.5x for on-path walls
+            if on_opp:
+                base *= 1.0 + (phase - 0.5)
             else:
-                score *= 1.0 - (phase - 0.5) * 0.5  # down to 0.75x for off-path
+                base *= 1.0 - (phase - 0.5) * 0.5
 
-        scored.append((score, move))
+        # Try horizontal wall
+        new_h = h_walls | bit
+        if is_critical:
+            if _bfs_exists(p1_pos, _p1_goal, new_h, v_walls) and \
+               _bfs_exists(p2_pos, _p2_goal, new_h, v_walls):
+                scored_append((base, wall_h(wr_pos, _wirc[wi][1])))
+        else:
+            scored_append((base, wall_h(wr_pos, _wirc[wi][1])))
+
+        # Try vertical wall
+        new_v = v_walls | bit
+        if is_critical:
+            if _bfs_exists(p1_pos, _p1_goal, h_walls, new_v) and \
+               _bfs_exists(p2_pos, _p2_goal, h_walls, new_v):
+                scored_append((base, wall_v(wr_pos, _wirc[wi][1])))
+        else:
+            scored_append((base, wall_v(wr_pos, _wirc[wi][1])))
+
+    if not scored:
+        return []
 
     # Sort descending by score
     scored.sort(key=lambda x: x[0], reverse=True)
 
     # --- Pass 2: BFS verification on top 2*K candidates ---
     verify_count = min(2 * top_k, len(scored))
-    if verify_count == 0:
-        return scored[:top_k]
 
     verified = []
+    verified_append = verified.append
+    _bfs_short = bfs_shortest_path
     for i in range(verify_count):
         heuristic_score, move = scored[i]
         wi = wall_idx(move[1], move[2])
@@ -182,21 +210,20 @@ def score_wall_moves(state, top_k: int = 10):
             new_h = h_walls
             new_v = v_walls | (1 << wi)
 
-        opp_dist_after = bfs_shortest_path(opp_pos, opp_goal, new_h, new_v)
-        my_dist_after = bfs_shortest_path(my_pos, my_goal, new_h, new_v)
+        opp_dist_after = _bfs_short(opp_pos, opp_goal, new_h, new_v)
+        my_dist_after = _bfs_short(my_pos, my_goal, new_h, new_v)
 
         if opp_dist_after < 0 or my_dist_after < 0:
-            # Shouldn't happen (walls are pre-validated) but be safe
             continue
 
         delta = (opp_dist_after - opp_dist) - (my_dist_after - my_dist)
         final_score = 0.3 * heuristic_score + 0.7 * delta
-        verified.append((final_score, move))
+        verified_append((final_score, move))
 
     # Also include remaining unverified walls (with heuristic score discounted)
     for i in range(verify_count, len(scored)):
         heuristic_score, move = scored[i]
-        verified.append((heuristic_score * 0.3, move))
+        verified_append((heuristic_score * 0.3, move))
 
     verified.sort(key=lambda x: x[0], reverse=True)
     return verified[:top_k]
