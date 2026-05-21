@@ -1,0 +1,35 @@
+game:
+  board_size: 9
+  walls_per_player: 10
+  max_moves: 400
+
+bots:
+  random: {}
+  greedy:
+    path_weight: 2.0
+    wall_weight: 1.0
+  minimax:
+    depth: 2
+    path_weight: 2.0
+    wall_weight: 1.0
+  alphabeta:
+    depth: 3
+    path_weight: 2.0
+    wall_weight: 1.0
+  mcts:
+    simulations: 1000
+    exploration: 1.414
+    rollout: random
+
+match:
+  games: 100
+  swap_colors: true
+  parallel: true
+  max_workers: null
+
+tournament:
+  games_per_pair: 200
+
+logging:
+  save_games: true
+  log_dir: logs

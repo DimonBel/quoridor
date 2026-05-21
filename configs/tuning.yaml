@@ -1,0 +1,8 @@
+bot: alphabeta
+search_space:
+  depth: [2, 3, 4]
+  path_weight: [1.0, 1.5, 2.0]
+  wall_weight: [0.2, 0.5, 0.8]
+opponent: greedy
+games_per_config: 500
+method: grid
