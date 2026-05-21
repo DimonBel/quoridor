@@ -128,6 +128,16 @@ def _cmd_replay(args, config):
     replay_game(args.file)
 
 
+def _cmd_test(args, config):
+    import subprocess
+    cmd = [sys.executable, "-m", "pytest", "tests/test_performance.py", "-v", "-s"]
+    if args.filter:
+        cmd.extend(["-k", args.filter])
+    if args.dashboard:
+        cmd.extend(["-k", "test_dashboard"])
+    sys.exit(subprocess.call(cmd))
+
+
 def _cmd_bots(args, config):
     discover_bots()
     from quoridor.bots.registry import BOTS
@@ -165,6 +175,10 @@ def main():
     replay_p = sub.add_parser("replay", help="Replay a saved game")
     replay_p.add_argument("--file", required=True)
 
+    test_p = sub.add_parser("test", help="Run performance tests and diagnostics")
+    test_p.add_argument("-k", "--filter", default=None, help="Filter tests by keyword (e.g. 'bfs', 'bot', 'scaling')")
+    test_p.add_argument("--dashboard", action="store_true", help="Run only the summary dashboard")
+
     bots_p = sub.add_parser("bots", help="List available bots")
 
     args = parser.parse_args()
@@ -182,6 +196,7 @@ def main():
         "tourney": _cmd_tourney,
         "tune": _cmd_tune,
         "replay": _cmd_replay,
+        "test": _cmd_test,
         "bots": _cmd_bots,
     }
     cmd_func = commands.get(args.command)
