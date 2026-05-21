@@ -1,20 +1,7 @@
 from quoridor.bots.base import Bot
 from quoridor.bots.registry import register
 from quoridor.core.state import GameState
-from quoridor.core.moves import PAWN
 from quoridor.eval.heuristics import evaluate
-
-
-def _sort_moves(moves: list) -> list:
-    pawn = []
-    walls = []
-    for m in moves:
-        if m[0] == PAWN:
-            pawn.append(m)
-        else:
-            walls.append(m)
-    pawn.extend(walls)
-    return pawn
 
 
 @register
@@ -26,11 +13,14 @@ class MinimaxBot(Bot):
         self.depth = params.get("depth", 2)
         self.path_weight = params.get("path_weight", 2.0)
         self.wall_weight = params.get("wall_weight", 0.5)
+        self.top_k = params.get("top_k", 10)
 
     def choose_move(self, state: GameState):
-        moves = _sort_moves(state.legal_moves())
+        moves = state.strategic_moves(top_k=self.top_k)
         if not moves:
-            return moves[0]
+            moves = state.pawn_moves_only()
+        if not moves:
+            return state.legal_moves()[0]
         best_move = moves[0]
         best_score = -999999.0
         maximizing = state.current_player == 0
@@ -52,7 +42,10 @@ class MinimaxBot(Bot):
         if depth == 0 or state.is_over():
             return self._evaluate(state)
 
-        moves = _sort_moves(state.legal_moves())
+        moves = state.strategic_moves(top_k=self.top_k)
+        if not moves:
+            moves = state.pawn_moves_only()
+
         if maximizing:
             best = -999999.0
             for move in moves:
@@ -79,4 +72,5 @@ class MinimaxBot(Bot):
             state.h_walls, state.v_walls,
             (state.walls_remaining[0], state.walls_remaining[1]),
             self.path_weight, self.wall_weight,
+            move_count=state.move_count,
         )

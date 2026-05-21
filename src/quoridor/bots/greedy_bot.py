@@ -13,11 +13,14 @@ class GreedyBot(Bot):
         super().__init__(**params)
         self.path_weight = params.get("path_weight", 2.0)
         self.wall_weight = params.get("wall_weight", 1.0)
+        self.top_k = params.get("top_k", 8)
 
     def choose_move(self, state: GameState):
-        moves = state.legal_moves()
+        moves = state.strategic_moves(top_k=self.top_k)
         if not moves:
-            return moves[0]
+            moves = state.pawn_moves_only()
+        if not moves:
+            return state.legal_moves()[0]
         best_move = moves[0]
         best_score = -999999.0
         cp = state.current_player

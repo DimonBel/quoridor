@@ -15,19 +15,6 @@ def _zobrist_hash(state: GameState) -> int:
     return h & 0x7FFFFFFFFFFFFFFF
 
 
-def _sort_moves(moves: list) -> list:
-    """Pawn moves first for better alpha-beta cutoffs."""
-    pawn = []
-    walls = []
-    for m in moves:
-        if m[0] == PAWN:
-            pawn.append(m)
-        else:
-            walls.append(m)
-    pawn.extend(walls)
-    return pawn
-
-
 @register
 class AlphaBetaBot(Bot):
     name = "alphabeta"
@@ -37,14 +24,17 @@ class AlphaBetaBot(Bot):
         self.depth = params.get("depth", 3)
         self.path_weight = params.get("path_weight", 2.0)
         self.wall_weight = params.get("wall_weight", 0.5)
+        self.root_top_k = params.get("root_top_k", 15)
+        self.inner_top_k = params.get("inner_top_k", 8)
         self._tt: dict = {}
 
     def choose_move(self, state: GameState):
-        moves = state.legal_moves()
+        moves = state.strategic_moves(top_k=self.root_top_k)
         if not moves:
-            return moves[0]
+            moves = state.pawn_moves_only()
+        if not moves:
+            return state.legal_moves()[0]
         self._tt.clear()
-        moves = _sort_moves(moves)
         best_move = moves[0]
         best_score = -_INF
         maximizing = state.current_player == 0
@@ -81,7 +71,10 @@ class AlphaBetaBot(Bot):
             tt[tt_key] = val
             return val
 
-        moves = _sort_moves(state.legal_moves())
+        moves = state.strategic_moves(top_k=self.inner_top_k)
+        if not moves:
+            moves = state.pawn_moves_only()
+
         if maximizing:
             val = -_INF
             for move in moves:
@@ -112,4 +105,5 @@ class AlphaBetaBot(Bot):
             state.h_walls, state.v_walls,
             (state.walls_remaining[0], state.walls_remaining[1]),
             self.path_weight, self.wall_weight,
+            move_count=state.move_count,
         )

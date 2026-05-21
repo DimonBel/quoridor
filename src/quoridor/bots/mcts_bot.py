@@ -4,7 +4,6 @@ from quoridor.bots.base import Bot
 from quoridor.bots.registry import register
 from quoridor.core.state import GameState
 from quoridor.core.moves import PAWN
-from quoridor.eval.heuristics import evaluate
 
 
 class _MCTSNode:
@@ -48,10 +47,13 @@ class MCTSBot(Bot):
         self.simulations = params.get("simulations", 1000)
         self.exploration = params.get("exploration", 1.414)
         self.rollout = params.get("rollout", "random")
+        self.top_k = params.get("top_k", 10)
         self._rng = random.Random(params.get("seed"))
 
     def choose_move(self, state: GameState):
-        moves = state.legal_moves()
+        moves = state.strategic_moves(top_k=self.top_k)
+        if not moves:
+            moves = state.pawn_moves_only()
         if len(moves) == 1:
             return moves[0]
 
@@ -69,13 +71,16 @@ class MCTSBot(Bot):
                 node = node.select_child(self.exploration)
                 sim_state.make_move(node.move)
 
-            # Expansion
+            # Expansion — use strategic moves to keep tree narrow
             if node.untried_moves and not sim_state.is_over():
                 move = self._rng.choice(node.untried_moves)
                 sim_state.make_move(move)
+                child_moves = sim_state.strategic_moves(top_k=self.top_k)
+                if not child_moves:
+                    child_moves = sim_state.pawn_moves_only()
                 node = node.add_child(
                     move,
-                    sim_state.legal_moves(),
+                    child_moves,
                     1 - sim_state.current_player,
                 )
 
