@@ -76,7 +76,7 @@ class TestMakeUnmakeExact:
         undos = []
         undos.append(state.make_move(pawn_move(1, 4)))
         moves = state.legal_moves()
-        wall_moves = [m for m in moves if m.is_wall]
+        wall_moves = [m for m in moves if m[0] != 0]  # not PAWN
         if wall_moves:
             undos.append(state.make_move(wall_moves[0]))
         for undo in reversed(undos):

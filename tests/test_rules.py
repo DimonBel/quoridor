@@ -11,7 +11,7 @@ from quoridor.core.board import (
     is_edge_blocked,
     DIR_N, DIR_S, DIR_W, DIR_E,
 )
-from quoridor.core.moves import Move, MoveType, Player, pawn_move, wall_h, wall_v
+from quoridor.core.moves import PAWN, WALL_H, WALL_V, Player, pawn_move, wall_h, wall_v
 from quoridor.core.state import GameState
 from quoridor.core.rules import (
     check_winner,
@@ -203,7 +203,7 @@ class TestRules:
         pawn_moves = generate_pawn_moves(
             state.p1_pos, state.p2_pos, 0, 0
         )
-        positions = {(m.row, m.col) for m in pawn_moves}
+        positions = {(m[1], m[2]) for m in pawn_moves}
         assert positions == {(1, 4), (0, 3), (0, 5)}
 
     def test_initial_pawn_moves_p2(self):
@@ -211,7 +211,7 @@ class TestRules:
         pawn_moves = generate_pawn_moves(
             state.p2_pos, state.p1_pos, 0, 0
         )
-        positions = {(m.row, m.col) for m in pawn_moves}
+        positions = {(m[1], m[2]) for m in pawn_moves}
         assert positions == {(7, 4), (8, 3), (8, 5)}
 
     def test_jump_over_opponent(self):
@@ -221,7 +221,7 @@ class TestRules:
         pawn_moves = generate_pawn_moves(
             state.p1_pos, state.p2_pos, 0, 0
         )
-        positions = {(m.row, m.col) for m in pawn_moves}
+        positions = {(m[1], m[2]) for m in pawn_moves}
         assert (5, 4) in positions
 
     def test_jump_blocked_wall_south(self):
@@ -233,7 +233,7 @@ class TestRules:
         pawn_moves = generate_pawn_moves(
             state.p1_pos, state.p2_pos, h_walls, 0
         )
-        positions = {(m.row, m.col) for m in pawn_moves}
+        positions = {(m[1], m[2]) for m in pawn_moves}
         assert (5, 4) not in positions
 
     def test_winner_none_initially(self):
@@ -261,9 +261,9 @@ class TestRules:
             h_walls, 0,
             (state.walls_remaining[0], state.walls_remaining[1]),
         )
-        wall_moves = [m for m in moves if m.is_wall]
+        wall_moves = [m for m in moves if m[0] != PAWN]
         for wm in wall_moves:
-            if wm.move_type == MoveType.WALL_H:
-                wi = wall_idx(wm.row, wm.col)
+            if wm[0] == WALL_H:
+                wi = wall_idx(wm[1], wm[2])
                 new_h = h_walls | (1 << wi)
                 assert bfs_path_exists(sq(0, 4), 8, new_h, 0) or not bfs_path_exists(sq(0, 4), 8, h_walls, 0)
